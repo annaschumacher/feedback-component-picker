@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Component Picker - Design System Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for better embedding */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        /* Smooth transitions */
+        .transition-all {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        /* Custom hover effects */
+        .hover\:shadow-md:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .hover\:shadow-sm:hover {
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="app" class="max-w-5xl mx-auto p-6 space-y-6">
+        <!-- Header -->
+        <header class="flex items-start justify-between gap-4 flex-col lg:flex-row">
+            <div class="flex-1">
+                <h1 class="text-2xl font-bold tracking-tight mb-2">Component picker</h1>
+                <p class="text-gray-600">
+                    Select <span class="font-medium text-gray-800">severity</span> and <span class="font-medium text-gray-800">message type</span> to find the right component. Use filters to refine results.
+                </p>
+            </div>
+            
+            <button 
+                id="resetBtn"
+                class="px-4 py-2 rounded-lg text-sm border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-colors font-medium"
+            >
+                Reset all
+            </button>
+        </header>
+
+        <!-- Severity Selection -->
+        <section class="py-4 px-4 bg-gray-50 rounded-xl">
+            <div class="mb-3">
+                <h3 class="text-base font-semibold text-gray-900">1. Select severity</h3>
+                <p class="text-sm text-gray-500">How critical is this message for the user experience?</p>
+            </div>
+            <div id="severityGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- Severity options will be populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Message Type Selection -->
+        <section class="py-4 px-4 bg-gray-50 rounded-xl">
+            <div class="mb-3">
+                <h3 class="text-base font-semibold text-gray-900">2. Select message type</h3>
+                <p class="text-sm text-gray-500">What kind of communication pattern do you need?</p>
+            </div>
+            <div id="typeGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <!-- Type options will be populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Filters Section -->
+        <section class="py-4 px-4 bg-gray-50 rounded-xl">
+            <div id="filtersHeader" class="flex items-center justify-between mb-3">
+                <div>
+                    <h3 class="text-base font-semibold text-gray-900">3. Refine with filters</h3>
+                    <p class="text-sm text-gray-500 font-light">Optional</p>
+                </div>
+                <button
+                    id="toggleFilters"
+                    class="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
+                >
+                    Show filters
+                </button>
+            </div>
+            
+            <div id="filtersContent" class="space-y-4 py-1 hidden">
+                <!-- Filter questions will be populated by JavaScript -->
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section>
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Recommended components</h3>
+            <div id="results">
+                <!-- Results will be populated by JavaScript -->
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Data structures
+        const SEVERITIES = [
+            { name: "Critical", description: "High impact, blocks users from continuing" },
+            { name: "Major", description: "Significant impact, user can work around" },
+            { name: "Minor", description: "Low impact, doesn't block core functionality" },
+            { name: "Informational", description: "Helpful context, no action needed" }
+        ];
+
+        const TYPES = [
+            { name: "Indicator", description: "Shows current state passively" },
+            { name: "Validation", description: "Responds to user input errors" },
+            { name: "Notification", description: "Proactive messages to alert users" }
+        ];
+
+        const REGISTRY = {
+            "UI State": {
+                description: "This component displays to communicate a full-page empty, loading or error state.",
+                when: ["Full page errors", "Critical flows blocked", "Nothing to display due to error or empty state"],
+                why: "Use when the entire screen needs to shift into an error or empty mode, keeping users oriented when no content can be shown.",
+                scopes: ["Page", "Section"],
+                link: "/docs/components/ui-state",
+                tags: ["full-page", "blocking", "critical"]
+            },
+            Dialog: {
+                description: "Dialogs interrupt the user journey to communicate information considered most critical.",
+                when: ["Critical confirmations", "Destructive actions", "Permission or security issues"],
+                why: "Best for critical issues that must be acknowledged before the user can continue their workflow.",
+                scopes: ["Global", "Page"],
+                link: "/docs/components/dialog",
+                tags: ["modal", "blocking", "critical", "confirmation"]
+            },
+            "Inline field error": {
+                description: "Validation occurs after the user has finished interacting with the field to avoid disrupting input. If there's an error, we show an error message.",
+                when: ["Required field missing", "Invalid input format", "Validation after submit or blur"],
+                why: "Keeps feedback close to the problem so users can correct errors immediately without losing context.",
+                scopes: ["Inline"],
+                link: "/docs/components/field-error",
+                tags: ["form", "validation", "contextual", "inline"]
+            },
+            Alert: {
+                description: "The Alert is a messaging component designed to alert users about important information, ensuring they can complete tasks with ease.",
+                when: ["Recoverable issues", "Section-level errors", "Important but non-blocking updates"],
+                why: "Visible without blocking progress, ensuring users see and act on important information while maintaining workflow continuity.",
+                scopes: ["Global", "Section"],
+                link: "/docs/components/alert",
+                tags: ["banner", "prominent", "non-blocking"]
+            },
+            "Status light": {
+                description: "Status light is used to indicate the status of something. Such as if an item has high or low stock. Status light is non interactive.",
+                when: ["Stock level indicators", "System status", "Minor or informational signals"],
+                why: "Provides quick, at-a-glance status without demanding user action or interrupting their current task.",
+                scopes: ["Inline"],
+                link: "/docs/components/status-light",
+                tags: ["indicator", "status", "passive", "visual"]
+            },
+            Toast: {
+                description: "A toast notification is best used for brief, non-intrusive messages that inform about app processes or provide feedback to the user without requiring immediate interaction.",
+                when: ["Quick success or error feedback", "Background process updates", "Non-blocking confirmations"],
+                why: "Lightweight feedback that reassures users without interrupting their flow or requiring acknowledgment.",
+                scopes: ["Global"],
+                link: "/docs/components/toast",
+                tags: ["temporary", "auto-dismiss", "feedback", "non-intrusive"]
+            },
+            "Helper text": {
+                description: "Inline guidance that prevents errors before they happen.",
+                when: ["Field instructions", "Password or input rules", "Contextual tips before typing"],
+                why: "Reduces mistakes by clarifying expectations before users act, improving form completion success rates.",
+                scopes: ["Inline"],
+                link: "/docs/components/helper-text",
+                tags: ["guidance", "proactive", "form", "preventive"]
+            },
+            Tooltip: {
+                description: "Tooltips display additional information that is contextual, helpful, and nonessential while providing the ability to communicate and give clarity to a user.",
+                when: ["Explain icon meaning", "Provide nonessential context", "On-hover details"],
+                why: "Good for clarifying controls or icons without adding visual noise to the interface.",
+                scopes: ["Inline"],
+                link: "/docs/components/tooltip",
+                tags: ["on-demand", "hover", "contextual", "supplementary"]
+            },
+            Icon: {
+                description: "Decorative or semantic icon to signal state alongside text.",
+                when: ["Reinforce message with symbol", "Use with labels to clarify meaning", "Show status without relying on color only"],
+                why: "Supports clarity and accessibility when paired with text, enhances visual hierarchy and comprehension.",
+                scopes: ["Inline"],
+                link: "/docs/components/icon",
+                tags: ["visual", "reinforcement", "accessibility", "symbolic"]
+            }
+        };
+
+        const MATRIX = {
+            Critical: {
+                Indicator: [],
+                Validation: [],
+                Notification: ["UI State", "Dialog"]
+            },
+            Major: {
+                Indicator: [],
+                Validation: ["Inline field error"],
+                Notification: ["Alert"]
+            },
+            Minor: {
+                Indicator: ["Status light"],
+                Validation: [],
+                Notification: ["Toast", "Alert"]
+            },
+            Informational: {
+                Indicator: ["Status light", "Helper text", "Tooltip", "Icon"],
+                Validation: [],
+                Notification: ["Toast", "Alert"]
+            }
+        };
+
+        const FILTERS = [
+            {
+                question: "Who triggers the message?",
+                description: "Is this a response to something the user did, or does the system initiate it?",
+                options: ["User action", "System event", "Either"],
+                mapping: { Indicator: "Either", Validation: "User action", Notification: "System event" }
+            },
+            {
+                question: "Where should it appear?",
+                description: "Think about the scope and positioning of the message",
+                options: ["Near the problem", "Page level", "Flexible"],
+                mapping: { Indicator: "Near the problem", Validation: "Near the problem", Notification: "Page level" }
+            },
+            {
+                question: "Does it require user action?",
+                description: "Do users need to do something after seeing this message?",
+                options: ["Just informative", "Needs response", "Depends"],
+                mapping: { Indicator: "Just informative", Validation: "Needs response", Notification: "Depends" }
+            }
+        ];
+
+        // State management
+        let state = {
+            severity: null,
+            msgType: null,
+            filterAnswers: {},
+            showFilters: false
+        };
+
+        // Utility functions
+        function createChip(text, selected, onClick, variant = "default") {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.onclick = onClick;
+            
+            const baseClasses = "px-3 py-1.5 rounded-full text-sm border transition cursor-pointer font-medium";
+            let classes = baseClasses;
+            
+            if (variant === "filter" && selected) {
+                classes += " bg-gray-900 text-white border-gray-900 shadow-sm";
+            } else if (variant === "filter" && !selected) {
+                classes += " bg-white text-gray-600 border-gray-200 hover:bg-gray-50";
+            } else if (selected) {
+                classes += " bg-gray-900 text-white border-gray-900 shadow-sm";
+            } else {
+                classes += " bg-white text-gray-800 border-gray-300 hover:bg-gray-50 hover:border-gray-400";
+            }
+            
+            button.className = classes;
+            return button;
+        }
+
+        function createExternalLinkIcon() {
+            return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 group-hover:text-blue-500 transition-colors">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15,3 21,3 21,9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>`;
+        }
+
+        function renderCard(result, isMatch) {
+            const meta = REGISTRY[result.name] || { 
+                description: "", 
+                when: [], 
+                why: "Direct matrix match", 
+                scopes: [], 
+                link: "#", 
+                tags: [] 
+            };
+
+            return `
+                <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200 bg-white group">
+                    <div class="flex items-start justify-between gap-3 mb-3">
+                        <a
+                            href="${meta.link}"
+                            target="_blank"
+                            rel="noreferrer"
+                            class="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors group-hover:underline"
+                        >
+                            ${result.name}
+                            ${createExternalLinkIcon()}
+                        </a>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs px-2 py-1 rounded-full font-medium ${
+                                isMatch 
+                                    ? "bg-green-50 text-green-700" 
+                                    : "bg-yellow-50 text-yellow-700"
+                            }">
+                                ${result.score}% match
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm text-gray-700 mb-3">${meta.description}</p>
+                    
+                    ${isMatch && meta.why ? `
+                        <div class="mb-3">
+                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">Why this matches</div>
+                            <p class="text-sm text-gray-700">${meta.why}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${!isMatch && result.reasons && result.reasons.length > 0 ? `
+                        <div class="mb-3">
+                            <div class="text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">Why this may not match perfectly</div>
+                            ${result.reasons.length === 1 ? 
+                                `<p class="text-sm text-gray-700">${result.reasons[0]}</p>` :
+                                `<ul class="text-sm text-gray-700 space-y-1">
+                                    ${result.reasons.map(reason => `<li>• ${reason}</li>`).join('')}
+                                </ul>`
+                            }
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mb-3">
+                        <div class="text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">Where to place this component</div>
+                        <p class="text-sm text-gray-700">${meta.scopes ? meta.scopes.map(scope => `${scope} level`).join(", ") : "Not specified"}</p>
+                    </div>
+                    
+                    ${meta.tags ? `
+                        <div class="flex flex-wrap gap-1 mt-3">
+                            ${meta.tags.map(tag => `
+                                <span class="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">${tag}</span>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function calculateResults() {
+            if (!state.severity || !state.msgType) {
+                return { matches: [], mismatches: [] };
+            }
+
+            const items = MATRIX[state.severity][state.msgType];
+            const matches = [];
+            const mismatches = [];
+
+            items.forEach((name) => {
+                let score = 100;
+                let reasons = [];
+                let filtersApplied = 0;
+                let filterMatches = 0;
+                
+                FILTERS.forEach((f) => {
+                    if (state.filterAnswers[f.question]) {
+                        filtersApplied++;
+                        const expected = f.mapping[state.msgType];
+                        const userAnswer = state.filterAnswers[f.question];
+                        
+                        if (expected && expected !== "Either" && expected !== "Depends" && expected !== "Flexible") {
+                            if (userAnswer === expected) {
+                                filterMatches++;
+                            } else {
+                                const explanations = {
+                                    "Who triggers the message?": {
+                                        "User action": "because validation typically responds to what users do",
+                                        "System event": "because notifications are usually system-initiated",
+                                        "Either": "because indicators can be triggered by both user actions and system events"
+                                    },
+                                    "Where should it appear?": {
+                                        "Near the problem": "because validation and indicators work best when placed contextually",
+                                        "Page level": "because notifications need broader visibility",
+                                        "Flexible": "because placement can vary based on context"
+                                    },
+                                    "Does it require user action?": {
+                                        "Just informative": "because indicators typically don't require user response",
+                                        "Needs response": "because validation errors need to be addressed",
+                                        "Depends": "because notifications can be either informational or actionable"
+                                    }
+                                };
+                                const explanation = explanations[f.question] && explanations[f.question][expected] 
+                                    ? explanations[f.question][expected] 
+                                    : "";
+                                reasons.push(`Expected "${expected}" for "${f.question}" ${explanation}`);
+                            }
+                        } else {
+                            filterMatches++;
+                        }
+                    }
+                });
+                
+                if (filtersApplied > 0) {
+                    const filterScore = (filterMatches / filtersApplied) * 100;
+                    score = Math.round(filterScore);
+                }
+                
+                const result = { 
+                    name, 
+                    score: Math.max(score, 0), 
+                    reasons
+                };
+
+                if (result.score === 100) {
+                    matches.push(result);
+                } else if (result.score > 0) {
+                    mismatches.push(result);
+                }
+            });
+
+            return { matches, mismatches: mismatches.sort((a, b) => b.score - a.score) };
+        }
+
+        function renderResults() {
+            const resultsContainer = document.getElementById('results');
+            const { matches, mismatches } = calculateResults();
+
+            if (!state.severity || !state.msgType) {
+                resultsContainer.innerHTML = `
+                    <div class="text-center py-12 px-4 bg-gray-50 rounded-xl">
+                        <div class="text-gray-400 mb-4">
+                            <span class="text-4xl">🎯</span>
+                        </div>
+                        <p class="text-gray-600 text-lg font-medium mb-2">Get started</p>
+                        <p class="text-gray-500 text-sm">Select severity and message type above to see recommendations</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (matches.length === 0 && mismatches.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="p-6 rounded-xl bg-blue-50">
+                        <div class="flex items-start gap-3">
+                            <span class="text-blue-600 text-xl">💡</span>
+                            <div>
+                                <p class="text-blue-600 font-medium mb-1">
+                                    No components found for ${state.severity} + ${state.msgType}
+                                </p>
+                                <p class="text-blue-600 text-sm mb-3">
+                                    This combination typically indicates a design pattern that might need reconsideration.
+                                </p>
+                                <div class="text-sm text-blue-600">
+                                    <strong>Suggestions:</strong>
+                                    <ul class="mt-1 space-y-1 ml-4">
+                                        <li>• For critical issues, consider "Notification" type instead</li>
+                                        <li>• For validation, "Major" or "Minor" severity usually works better</li>
+                                        <li>• For indicators, try "Informational" or "Minor" severity</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="space-y-6">';
+            
+            if (matches.length > 0) {
+                html += `
+                    <div>
+                        <h4 class="text-sm font-normal text-gray-600 mb-3 flex items-center gap-2">
+                            <span>✅</span>
+                            Perfect matches (${matches.length})
+                        </h4>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            ${matches.map(r => renderCard(r, true)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (mismatches.length > 0) {
+                html += `
+                    <div>
+                        <h4 class="text-sm font-normal text-gray-600 mb-3 flex items-center gap-2">
+                            <span>⚠️</span>
+                            Possible alternatives (${mismatches.length})
+                        </h4>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            ${mismatches.map(r => renderCard(r, false)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            resultsContainer.innerHTML = html;
+        }
+
+        function renderSeverityOptions() {
+            const container = document.getElementById('severityGrid');
+            container.innerHTML = SEVERITIES.map(s => `
+                <div
+                    class="p-3 rounded-lg border cursor-pointer transition-all ${
+                        state.severity === s.name
+                            ? "border-gray-900 bg-gray-900 text-white shadow-sm"
+                            : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                    }"
+                    onclick="selectSeverity('${s.name}')"
+                >
+                    <div class="font-medium text-sm mb-1">${s.name}</div>
+                    <div class="text-xs ${state.severity === s.name ? "text-gray-200" : "text-gray-500"}">
+                        ${s.description}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTypeOptions() {
+            const container = document.getElementById('typeGrid');
+            container.innerHTML = TYPES.map(t => `
+                <div
+                    class="p-3 rounded-lg border cursor-pointer transition-all ${
+                        state.msgType === t.name
+                            ? "border-gray-900 bg-gray-900 text-white shadow-sm"
+                            : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                    }"
+                    onclick="selectType('${t.name}')"
+                >
+                    <div class="font-medium text-sm mb-1">${t.name}</div>
+                    <div class="text-xs ${state.msgType === t.name ? "text-gray-200" : "text-gray-500"}">
+                        ${t.description}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderFilters() {
+            const container = document.getElementById('filtersContent');
+            container.innerHTML = FILTERS.map((f, index) => `
+                <div class="${index < FILTERS.length - 1 ? "pb-4" : ""}">
+                    <p class="text-sm font-medium text-gray-800 mb-1">${f.question}</p>
+                    <p class="text-xs text-gray-500 mb-3">${f.description}</p>
+                    <div class="flex flex-wrap gap-2">
+                        ${f.options.map(opt => `
+                            <button
+                                class="px-3 py-1.5 rounded-full text-sm border transition cursor-pointer font-medium ${
+                                    state.filterAnswers[f.question] === opt
+                                        ? "bg-gray-900 text-white border-gray-900 shadow-sm"
+                                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                                }"
+                                onclick="selectFilter('${f.question}', '${opt}')"
+                            >
+                                ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Event handlers
+        function selectSeverity(severity) {
+            state.severity = severity;
+            renderSeverityOptions();
+            renderResults();
+        }
+
+        function selectType(msgType) {
+            state.msgType = msgType;
+            renderTypeOptions();
+            renderResults();
+        }
+
+        function selectFilter(question, option) {
+            if (state.filterAnswers[question] === option) {
+                delete state.filterAnswers[question];
+            } else {
+                state.filterAnswers[question] = option;
+            }
+            renderFilters();
+            renderResults();
+        }
+
+        function toggleFilters() {
+            state.showFilters = !state.showFilters;
+            const content = document.getElementById('filtersContent');
+            const button = document.getElementById('toggleFilters');
+            
+            if (state.showFilters) {
+                content.classList.remove('hidden');
+                button.textContent = 'Hide filters';
+            } else {
+                content.classList.add('hidden');
+                button.textContent = 'Show filters';
+            }
+        }
+
+        function clearAll() {
+            state = {
+                severity: null,
+                msgType: null,
+                filterAnswers: {},
+                showFilters: false
+            };
+            
+            renderSeverityOptions();
+            renderTypeOptions();
+            renderFilters();
+            renderResults();
+            
+            const content = document.getElementById('filtersContent');
+            const button = document.getElementById('toggleFilters');
+            content.classList.add('hidden');
+            button.textContent = 'Show filters';
+        }
+
+        // Initialize the app
+        function init() {
+            document.getElementById('resetBtn').onclick = clearAll;
+            document.getElementById('toggleFilters').onclick = toggleFilters;
+            
+            renderSeverityOptions();
+            renderTypeOptions();
+            renderFilters();
+            renderResults();
+        }
+
+        // Start the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
